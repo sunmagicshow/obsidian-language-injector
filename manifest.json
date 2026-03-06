@@ -1,0 +1,10 @@
+{
+  "id": "obsidian-language-injector",
+  "name": "Language Injector",
+  "version": "1.0.0",
+  "description": "",
+  "author": "蓝星晓夜",
+  "minAppVersion": "1.8.7",
+  "isDesktopOnly": true
+}
+
