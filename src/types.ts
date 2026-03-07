@@ -7,7 +7,7 @@ export interface DefaultLanguageSettings {
 
 // 定义W默认设置
 export const DEFAULT_SETTINGS: DefaultLanguageSettings = {
-    customLanguageProperty: 'code',
+    customLanguageProperty: 'language',
     isReplace: false ,
 };
 

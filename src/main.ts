@@ -1,18 +1,18 @@
 import {Plugin, TFile, TAbstractFile} from 'obsidian';
 import {DEFAULT_SETTINGS, DefaultLanguageSettings} from "./types";
 import {SettingTab} from "./SettingTab";
+import * as yaml from 'js-yaml';
 
 export default class LanguageInjectorByTagPlugin extends Plugin {
     settings: DefaultLanguageSettings = DEFAULT_SETTINGS;
+    //标记是否正在处理文件，避免死循环
+    private isProcessing = false;
 
     async onload() {
-        // 加载并合并配置
-        this.settings = {...DEFAULT_SETTINGS, ...(await this.loadData())};
+        const loadedData = await this.loadData();
+        this.settings = {...DEFAULT_SETTINGS, ...(loadedData as Partial<DefaultLanguageSettings> || {})};
 
-        // 添加设置项
         this.addSettingTab(new SettingTab(this.app, this));
-
-        // 注册事件以监听文件修改
         this.registerEvent(this.app.vault.on('modify', this.handleFileModify.bind(this)));
     }
 
@@ -21,42 +21,56 @@ export default class LanguageInjectorByTagPlugin extends Plugin {
     }
 
     private async handleFileModify(file: TAbstractFile) {
-        // 非 md 文件直接跳过
+        //  非 md 文件跳过
         if (!(file instanceof TFile) || file.extension !== 'md') return;
+        if (this.isProcessing) return;
 
-        // 读取前置数据和文件内容
-        const frontmatter = this.parseFrontMatter(file);
-        const defaultLang = frontmatter?.[this.settings.customLanguageProperty] || '';
+        try {
+            // 标记为正在处理
+            this.isProcessing = true;
 
-        // 无默认语言时直接返回，避免无效处理
-        if (!defaultLang) return;
+            const content = await this.app.vault.cachedRead(file);
+            const frontmatter = this.parseFrontMatterFromContent(content);
+            const langValue = frontmatter?.[this.settings.customLanguageProperty];
+            const defaultLang = typeof langValue === 'string' ? langValue : '';
 
-        const content = await this.app.vault.cachedRead(file);
-        const newContent = this.updateCodeBlocks(content, defaultLang);
+            if (!defaultLang) return;
 
-        if (newContent !== content) {
-            await this.app.vault.modify(file, newContent);
+            const newContent = this.updateCodeBlocks(content, defaultLang);
+            // 4. 只有内容真的变化且非空时才修改（避免空修改触发循环）
+            if (newContent && newContent !== content) {
+                await this.app.vault.modify(file, newContent);
+            }
+        } finally {
+            // 5. 无论是否出错，都标记为处理完成
+            this.isProcessing = false;
         }
     }
 
-    parseFrontMatter(file: TFile): Record<string, any> | null {
-        const cache = this.app.metadataCache.getFileCache(file);
-        return cache?.frontmatter || null;
+    parseFrontMatterFromContent(content: string): Record<string, unknown> | null {
+        const frontmatterRegex = /^---\n([\s\S]*?)\n---/;
+        const match = content.match(frontmatterRegex);
+
+        if (!match) return null;
+
+        try {
+            return yaml.load(match[1]) as Record<string, unknown>;
+        } catch {
+            return null;
+        }
     }
 
     updateCodeBlocks(content: string, defaultLanguage: string): string {
-        // 正则表达式匹配代码块，捕获可选语言和代码内容
-        const codeBlockRegex = /```([^\n]*?)\n([\s\S]*?)(?:\n)?```/g;
+        const codeBlockRegex = /```([^\n]*)\n([\s\S]*?)\n```/g;
 
         return content.replace(codeBlockRegex, (match, language, code) => {
             const trimmedLanguage = language.trim();
 
-            // 根据 isReplace 决定替换规则
             if (this.settings.isReplace) {
-                return `\`\`\`${defaultLanguage}\n${code}\n\`\`\``;
+                return `\`\`\`${defaultLanguage}\n${code.trimEnd()}\n\`\`\``;
             } else {
                 return trimmedLanguage === ''
-                    ? `\`\`\`${defaultLanguage}\n${code}\n\`\`\``
+                    ? `\`\`\`${defaultLanguage}\n${code.trimEnd()}\n\`\`\``
                     : match;
             }
         });

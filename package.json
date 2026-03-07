@@ -4,6 +4,7 @@
   "type": "module",
   "main": "index.js",
   "dependencies": {
+    "@typescript-eslint/parser": "^8.56.1",
     "argparse": "^2.0.1",
     "esbuild": "^0.27.3",
     "js-yaml": "^4.1.0"
@@ -11,6 +12,7 @@
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^25.3.5",
+    "@typescript-eslint/eslint-plugin": "^8.56.1",
     "eslint": "^10.0.2",
     "eslint-plugin-obsidianmd": "^0.1.9",
     "obsidian": "^1.7.2",
